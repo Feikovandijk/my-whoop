@@ -44,6 +44,19 @@ ios/OpenWhoop/Info.plist
 # Local agent/tooling config — never publish
 .claude/
 
+# Android build artifacts / IDE state (the app source under android/app/ IS committed)
+android/.gradle/
+android/.idea/
+android/build/
+android/app/build/
+android/local.properties
+android/captures/
+android/.cxx/
+*.iml
+
+# Server secrets
+server/.env
+
 # macOS
 .DS_Store
 
