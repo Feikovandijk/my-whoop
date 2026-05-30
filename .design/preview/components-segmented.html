@@ -1,0 +1,16 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--bg-0);padding:22px;font-family:var(--font-ui)}
+  .seg{display:flex;gap:4px;background:var(--bg-1);border:1px solid var(--line-1);border-radius:var(--r-input);padding:4px}
+  .seg>div{flex:1;text-align:center;padding:9px;border-radius:8px;font-size:13px;font-weight:700;color:var(--fg-3);cursor:pointer}
+  .seg .on{background:rgba(43,240,122,.13);border:1px solid var(--green);color:var(--green)}
+  .tabs{display:flex;gap:8px;margin-top:14px}
+  .tabs>div{flex:1;text-align:center;padding:9px;border-radius:8px;font-size:11px;font-weight:700;background:var(--bg-1);border:1px solid var(--line-1);color:var(--fg-3)}
+  .tabs .on{background:rgba(44,155,255,.12);border-color:var(--blue);color:#fff}
+</style></head><body>
+  <div class="seg"><div class="on">7D</div><div>30D</div><div>90D</div></div>
+  <div class="tabs"><div>Recovery</div><div class="on">Strain</div><div>HRV</div><div>RHR</div></div>
+</body></html>

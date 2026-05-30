@@ -1,0 +1,20 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--bg-0);padding:24px;font-family:var(--font-ui);display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .chip{display:inline-flex;align-items:center;gap:7px;border-radius:var(--r-chip);padding:7px 14px;font-size:12px;font-weight:700;letter-spacing:.3px}
+  .dot{width:7px;height:7px;border-radius:50%}
+  .g{background:rgba(43,240,122,.15);border:1px solid rgba(43,240,122,.5);color:var(--green)}
+  .b{background:rgba(44,155,255,.15);border:1px solid rgba(44,155,255,.5);color:var(--blue)}
+  .r{background:rgba(255,77,106,.15);border:1px solid rgba(255,77,106,.5);color:var(--red)}
+  .y{background:rgba(255,210,63,.15);border:1px solid rgba(255,210,63,.5);color:var(--yellow)}
+</style></head><body>
+  <span class="chip g"><span class="dot" style="background:var(--green)"></span>Connected</span>
+  <span class="chip b"><span class="dot" style="background:var(--blue)"></span>Bonded</span>
+  <span class="chip r"><span class="dot" style="background:var(--red)"></span>Disconnected</span>
+  <span class="chip y"><span class="dot" style="background:var(--yellow)"></span>Unbonded</span>
+  <span class="chip g">84% battery</span>
+  <span class="chip y">14.2 strain</span>
+</body></html>

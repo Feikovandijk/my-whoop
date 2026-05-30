@@ -1,0 +1,26 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--bg-0);padding:24px;font-family:var(--font-ui)}
+  .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+  button{font-family:var(--font-ui);font-weight:700;font-size:14px;border:0;border-radius:var(--r-input);padding:12px 20px;cursor:pointer}
+  .primary{background:var(--green);color:var(--fg-on-accent)}
+  .secondary{background:var(--blue);color:#fff}
+  .tertiary{background:var(--bg-2);color:var(--fg-1);border:1px solid var(--line-2)}
+  .destructive{background:rgba(255,77,106,.16);color:var(--red);border:1px solid var(--red)}
+  .txt{background:none;padding:0;font-size:13px}
+  .txt.y{color:var(--yellow)}.txt.b{color:var(--blue)}
+</style></head><body>
+  <div class="row">
+    <button class="primary">Sync Strap</button>
+    <button class="secondary">Sync Server</button>
+    <button class="tertiary">Capture IMU · 30s</button>
+    <button class="destructive">Wipe Local DB</button>
+  </div>
+  <div class="row">
+    <button class="txt y">How strain is built →</button>
+    <button class="txt b">Inputs →</button>
+  </div>
+</body></html>

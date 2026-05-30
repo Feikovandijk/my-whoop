@@ -1,0 +1,29 @@
+<!-- @dsCard group="Colors" -->
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--bg-0);padding:22px;font-family:var(--font-ui)}
+  .row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+  .sw{border-radius:var(--r-tile);overflow:hidden;border:1px solid var(--line-2)}
+  .chip{height:58px}
+  .meta{padding:9px 11px;background:var(--bg-1)}
+  .nm{font-size:11px;font-weight:700;color:var(--fg-1)}
+  .hex{font-family:var(--font-mono);font-size:10px;color:var(--fg-2);margin-top:3px}
+  .lines{margin-top:14px;display:flex;gap:18px;align-items:center}
+  .ln{flex:1;height:1px}
+  .lab{font-size:10px;color:var(--fg-3);font-family:var(--font-mono)}
+</style></head><body>
+  <div class="row">
+    <div class="sw"><div class="chip" style="background:var(--bg-0)"></div><div class="meta"><div class="nm">bg-0</div><div class="hex">#07090B</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--bg-1)"></div><div class="meta"><div class="nm">bg-1 card</div><div class="hex">#0E1216</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--bg-2)"></div><div class="meta"><div class="nm">bg-2 input</div><div class="hex">#161B20</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--bg-3)"></div><div class="meta"><div class="nm">bg-3 press</div><div class="hex">#1F262C</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--console)"></div><div class="meta"><div class="nm">console</div><div class="hex">#0A0C0E</div></div></div>
+  </div>
+  <div class="lines">
+    <div class="ln" style="background:var(--line-1)"></div><span class="lab">line-1 .07</span>
+    <div class="ln" style="background:var(--line-2)"></div><span class="lab">line-2 .12</span>
+    <div class="ln" style="background:var(--line-3)"></div><span class="lab">line-3 .04</span>
+  </div>
+</body></html>

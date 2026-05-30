@@ -581,7 +581,7 @@ class WhoopBleService : Service() {
 
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
             val bytes = characteristic.value ?: return
-            android.util.Log.d("WhoopBleService", "CharChanged UUID=${characteristic.uuid} len=${bytes.size}")
+            android.util.Log.i("WhoopBleService", "CharChanged UUID=${characteristic.uuid} len=${bytes.size}")
             when (characteristic.uuid) {
                 HEART_RATE_CHAR_UUID -> {
                     parseStandardHR(bytes)
@@ -599,7 +599,7 @@ class WhoopBleService : Service() {
 
                         // Parse clockRef if GET_CLOCK response is received
                         val parsed = Interpreter.parseFrame(this@WhoopBleService, frame)
-                        android.util.Log.d("WhoopBleService", "Frame parsed: ok=${parsed.ok} type=${parsed.typeName} cmd=${parsed.cmdName} keys=${parsed.parsed.keys}")
+                        android.util.Log.i("WhoopBleService", "Frame parsed: ok=${parsed.ok} type=${parsed.typeName} cmd=${parsed.cmdName} keys=${parsed.parsed.keys}")
                         if (parsed.ok && parsed.crcOK == true && parsed.typeName == "COMMAND_RESPONSE") {
                             val deviceClock = parsed.parsed["clock"]?.let {
                                 when (it) {
@@ -623,7 +623,7 @@ class WhoopBleService : Service() {
                             val frameType = frame[4].toInt() and 0xFF
                             if (frameType == 40 && frame.size > 13) {
                                 val hr = frame[12].toInt() and 0xFF
-                                android.util.Log.d("WhoopBleService", "REALTIME_DATA frame: HR=$hr")
+                                android.util.Log.i("WhoopBleService", "REALTIME_DATA frame: HR=$hr")
                             }
                         }
 
@@ -631,15 +631,17 @@ class WhoopBleService : Service() {
                             strapNewestTs = dataRangeNewestUnix(frame)
                         }
 
-                        collector?.ingest(frame)
-
                         if (backfilling) {
-                            backfillChannel.trySend(frame)
+                            if (isOffloadFrame(frame)) {
+                                backfillChannel.trySend(frame)
+                            }
+                        } else {
+                            collector?.ingest(frame)
                         }
                     }
                 }
                 else -> {
-                    android.util.Log.d("WhoopBleService", "Notification from unknown UUID: ${characteristic.uuid}")
+                    android.util.Log.i("WhoopBleService", "Notification from unknown UUID: ${characteristic.uuid}")
                 }
             }
         }
@@ -663,9 +665,11 @@ class WhoopBleService : Service() {
         sendCommand(gatt, WhoopCommand.SET_CLOCK, setClockPayload)
         sendCommand(gatt, WhoopCommand.GET_CLOCK, byteArrayOf())
         sendCommand(gatt, WhoopCommand.SEND_R10_R11_REALTIME, byteArrayOf(0x00))
+        sendCommand(gatt, WhoopCommand.TOGGLE_REALTIME_HR, byteArrayOf(0x01))
         sendCommand(gatt, WhoopCommand.GET_DATA_RANGE, byteArrayOf())
         
         serviceScope.launch {
+            syncAlarmToStrap()
             delay(1500)
             requestSync(BackfillTrigger.CONNECT)
         }
@@ -676,7 +680,7 @@ class WhoopBleService : Service() {
 
     private fun parseStandardHR(data: ByteArray) {
         val result = StandardHeartRate.parse(data) ?: return
-        android.util.Log.d("WhoopBleService", "parseStandardHR: dataLen=${data.size} hr=${result.hr} rrCount=${result.rr.size}")
+        android.util.Log.i("WhoopBleService", "parseStandardHR: dataLen=${data.size} hr=${result.hr} rrCount=${result.rr.size}")
         if (result.rr.isNotEmpty()) {
             liveState.updateRR(result.rr)
         }
@@ -700,6 +704,12 @@ class WhoopBleService : Service() {
             i += 4
         }
         return newest
+    }
+
+    private fun isOffloadFrame(frame: ByteArray): Boolean {
+        if (frame.size <= 4) return false
+        val type = frame[4].toInt() and 0xFF
+        return type == 47 || type == 48 || type == 49 || type == 50
     }
 
     private fun ackHistoricalChunk(trim: Long, endData: ByteArray) {
@@ -848,6 +858,65 @@ class WhoopBleService : Service() {
         log("Alarm: disarmed")
     }
 
+    fun setStrapAlarm(epochSec: Long) {
+        val gatt = bluetoothGatt ?: return
+        val payload = WhoopCommand.setAlarmPayload(epochSec)
+        sendCommand(gatt, WhoopCommand.SET_ALARM_TIME, payload)
+        log("Alarm: set time to epoch $epochSec (${Date(epochSec * 1000)})")
+    }
+
+    fun syncAlarmToStrap() {
+        try {
+            val prefs = getSharedPreferences("whoop_prefs", MODE_PRIVATE)
+            val alarmOn = prefs.getBoolean("alarm_on", false)
+            if (alarmOn) {
+                val alarmHour = prefs.getInt("alarm_hour", 7)
+                val alarmMinute = prefs.getInt("alarm_minute", 0)
+                val alarmDaysString = prefs.getString("alarm_days", "") ?: ""
+                val alarmDays = if (alarmDaysString.isEmpty()) emptySet() else alarmDaysString.split(",").mapNotNull { it.toIntOrNull() }.toSet()
+                val epoch = calculateNextAlarmEpoch(alarmHour, alarmMinute, alarmDays)
+                setStrapAlarm(epoch)
+            } else {
+                disableStrapAlarm()
+            }
+        } catch (e: Exception) {
+            log("Error syncing alarm: ${e.message}")
+        }
+    }
+
+    private fun calculateNextAlarmEpoch(hour: Int, minute: Int, daysOfWeek: Set<Int>): Long {
+        val now = Calendar.getInstance()
+        val alarmTime = Calendar.getInstance()
+        alarmTime.set(Calendar.HOUR_OF_DAY, hour)
+        alarmTime.set(Calendar.MINUTE, minute)
+        alarmTime.set(Calendar.SECOND, 0)
+        alarmTime.set(Calendar.MILLISECOND, 0)
+
+        if (daysOfWeek.isEmpty()) {
+            if (alarmTime.before(now)) {
+                alarmTime.add(Calendar.DAY_OF_YEAR, 1)
+            }
+            return alarmTime.timeInMillis / 1000
+        }
+
+        for (i in 0..7) {
+            val testTime = alarmTime.clone() as Calendar
+            testTime.add(Calendar.DAY_OF_YEAR, i)
+            val testDayOfWeek = testTime.get(Calendar.DAY_OF_WEEK)
+            val jsDayOfWeek = testDayOfWeek - 1 // 0 for Sunday... 6 for Saturday
+            if (daysOfWeek.contains(jsDayOfWeek)) {
+                if (testTime.after(now)) {
+                    return testTime.timeInMillis / 1000
+                }
+            }
+        }
+        
+        if (alarmTime.before(now)) {
+            alarmTime.add(Calendar.DAY_OF_YEAR, 1)
+        }
+        return alarmTime.timeInMillis / 1000
+    }
+
     fun captureRawAccel(seconds: Double) {
         val secs = RawCaptureWindow.clamp(seconds)
         collector?.beginRawCapture(secs)
@@ -869,10 +938,21 @@ class WhoopBleService : Service() {
         requestSync(BackfillTrigger.MANUAL)
     }
 
+    fun manualConnect() {
+        intentionalDisconnect = false
+        log("Manual connect requested. Scanning for strap...")
+        startScanning()
+    }
+
+    fun manualDisconnect() {
+        log("Manual disconnect requested.")
+        disconnectGatt()
+    }
+
     private fun log(s: String) {
         val stamp = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
         liveState.appendLog("[$stamp] $s")
-        android.util.Log.d("WhoopBleService", s)
+        android.util.Log.i("WhoopBleService", s)
     }
 }
 

@@ -1,0 +1,172 @@
+/* ============================================================================
+   OpenWhoop — Colors & Type
+   Design tokens for the OpenWhoop Android client (WHOOP 4.0 local companion).
+   Derived from the app's existing dark theme (MainActivity.kt) and refined into
+   a modern, data-dense, athletic recovery dashboard system.
+   ----------------------------------------------------------------------------
+   Fonts: the source Android app uses Compose system defaults (sans + monospace,
+   no bundled typefaces). This system substitutes Google Fonts — flag to user.
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Saira+Condensed:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root {
+  /* ---- Surfaces (cool near-black, charcoal cards) ---- */
+  --bg-0:   #07090B;   /* app background — deepest */
+  --bg-1:   #0E1216;   /* card / surface */
+  --bg-2:   #161B20;   /* elevated surface / input fill */
+  --bg-3:   #1F262C;   /* hover / pressed surface */
+  --console:#0A0C0E;   /* device log console */
+
+  /* ---- Hairlines & dividers ---- */
+  --line-1: rgba(255,255,255,0.07);   /* default card border */
+  --line-2: rgba(255,255,255,0.12);   /* stronger divider */
+  --line-3: rgba(255,255,255,0.04);   /* chart gridline */
+
+  /* ---- Text ---- */
+  --fg-1:   #FFFFFF;   /* primary */
+  --fg-2:   #9AA4AD;   /* secondary / labels */
+  --fg-3:   #5D666E;   /* tertiary / captions, axis ticks */
+  --fg-on-accent: #06140C; /* text on bright green fills */
+
+  /* ---- Metric & brand colors ---- */
+  --green:  #2BF07A;   /* recovery HIGH (>=67%), primary brand, "go" */
+  --green-dim: #1AB659;
+  --yellow: #FFD23F;   /* recovery MID (34-66%), strain accent */
+  --red:    #FF4D6A;   /* recovery LOW (<34%), alerts, destructive */
+  --blue:   #2C9BFF;   /* strain, sleep, secondary brand */
+  --blue-dim: #1C6FBE;
+  --teal:   #2EE6C6;   /* accent, light-sleep, zone-1 */
+  --purple: #A66BFF;   /* REM sleep */
+  --indigo: #3D5AFE;   /* deep sleep (SWS) */
+
+  /* ---- Recovery bands (semantic aliases) ---- */
+  --rec-high: var(--green);
+  --rec-mid:  var(--yellow);
+  --rec-low:  var(--red);
+
+  /* ---- HR training zones (Z0..Z5) ---- */
+  --zone-0: #3F5450;
+  --zone-1: #2EE6C6;
+  --zone-2: #39D6FF;
+  --zone-3: #FFD23F;
+  --zone-4: #FF9F43;
+  --zone-5: #FF5A6E;
+
+  /* ---- Sleep stages ---- */
+  --stage-deep:  #3D5AFE;
+  --stage-rem:   #A66BFF;
+  --stage-light: #2C9BFF;
+  --stage-awake: #FF4D6A;
+
+  /* ---- Type families ---- */
+  --font-display: 'Saira Condensed', 'Archivo', system-ui, sans-serif; /* hero numbers */
+  --font-ui:      'Archivo', system-ui, -apple-system, sans-serif;     /* everything */
+  --font-mono:    'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
+
+  /* ---- Radii ---- */
+  --r-card:  20px;
+  --r-tile:  16px;
+  --r-input: 12px;
+  --r-chip:  999px;
+
+  /* ---- Spacing scale (4px base) ---- */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px; --s-8: 32px; --s-10: 40px; --s-12: 48px;
+
+  /* ---- Elevation ---- */
+  --shadow-card: 0 1px 0 rgba(255,255,255,0.04) inset, 0 8px 24px rgba(0,0,0,0.45);
+  --shadow-pop:  0 16px 48px rgba(0,0,0,0.6);
+  --glow-green:  0 0 28px rgba(43,240,122,0.30);
+  --glow-blue:   0 0 28px rgba(44,155,255,0.30);
+
+  /* ---- Motion ---- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-std: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-ring: 1200ms;  /* arc fill on entry */
+  --dur-ui:   200ms;   /* taps, hovers */
+}
+
+/* ============================================================================
+   SEMANTIC TYPE ROLES
+   Athletic scoreboard hero numerals (Saira Condensed) + Archivo UI.
+   Micro-labels are uppercase Archivo with wide tracking — the system's signature.
+   ========================================================================== */
+
+.ow-hero {            /* recovery %, the single biggest number on a screen */
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 88px;
+  line-height: 0.9;
+  letter-spacing: -0.5px;
+  color: var(--fg-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.ow-stat {            /* big metric value: strain 14.2, 132 bpm */
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 44px;
+  line-height: 1;
+  letter-spacing: -0.25px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ow-stat-sm {         /* tile values: HRV 62 ms */
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.ow-h1 {              /* screen title: "Today" */
+  font-family: var(--font-ui);
+  font-weight: 800;
+  font-size: 30px;
+  line-height: 1.05;
+  letter-spacing: -0.4px;
+  color: var(--fg-1);
+}
+
+.ow-h2 {              /* card heading */
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 1.2;
+  color: var(--fg-1);
+}
+
+.ow-body {
+  font-family: var(--font-ui);
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--fg-2);
+}
+
+.ow-label {           /* SIGNATURE micro-label: "DAY STRAIN", "RECOVERY" */
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
+
+.ow-caption {
+  font-family: var(--font-ui);
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--fg-3);
+}
+
+.ow-mono {            /* console / hex / technical readout */
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--fg-2);
+}

@@ -1,0 +1,23 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--bg-0);padding:22px;font-family:var(--font-ui)}
+  .lab{font-weight:700;font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:var(--fg-2)}
+  .head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .val{font-family:var(--font-display);font-weight:700;font-size:24px;color:var(--blue)}
+  .track{height:10px;border-radius:5px;background:rgba(255,255,255,.06);overflow:hidden}
+  .fill{height:100%;border-radius:5px;background:linear-gradient(90deg,var(--blue),var(--green))}
+  .zone{display:flex;height:12px;border-radius:6px;overflow:hidden;margin-top:20px}
+  .zone>div{height:100%}
+  .cap{font-size:11px;color:var(--fg-3);margin-top:8px}
+</style></head><body>
+  <div class="head"><span class="lab">Day Strain</span><span class="val">14.2</span></div>
+  <div class="track"><div class="fill" style="width:67%"></div></div>
+  <div class="cap">0–21 logarithmic scale · blue→green gradient fill</div>
+  <div class="zone">
+    <div style="width:14%;background:var(--zone-0)"></div><div style="width:22%;background:var(--zone-1)"></div><div style="width:30%;background:var(--zone-2)"></div><div style="width:18%;background:var(--zone-3)"></div><div style="width:11%;background:var(--zone-4)"></div><div style="width:5%;background:var(--zone-5)"></div>
+  </div>
+  <div class="cap">HR-zone breakdown rail · Z0→Z5</div>
+</body></html>

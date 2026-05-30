@@ -1,0 +1,31 @@
+<!-- @dsCard group="Colors" -->
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--bg-0);padding:22px;font-family:var(--font-ui)}
+  .label{font-weight:700;font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:var(--fg-2);margin-bottom:14px}
+  .rail{display:flex;height:26px;border-radius:var(--r-chip);overflow:hidden}
+  .rail>div{flex:1;display:grid;place-items:center;font-family:var(--font-mono);font-size:10px;color:rgba(0,0,0,.55);font-weight:700}
+  .legend{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:14px}
+  .legend div{font-size:10px;color:var(--fg-3)}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
+</style></head><body>
+  <div class="label">Heart-rate training zones</div>
+  <div class="rail">
+    <div style="background:var(--zone-0)">Z0</div>
+    <div style="background:var(--zone-1)">Z1</div>
+    <div style="background:var(--zone-2)">Z2</div>
+    <div style="background:var(--zone-3)">Z3</div>
+    <div style="background:var(--zone-4)">Z4</div>
+    <div style="background:var(--zone-5)">Z5</div>
+  </div>
+  <div class="legend">
+    <div><span class="dot" style="background:var(--zone-0)"></span>Rest</div>
+    <div><span class="dot" style="background:var(--zone-1)"></span>Very light</div>
+    <div><span class="dot" style="background:var(--zone-2)"></span>Light</div>
+    <div><span class="dot" style="background:var(--zone-3)"></span>Moderate</div>
+    <div><span class="dot" style="background:var(--zone-4)"></span>Hard</div>
+    <div><span class="dot" style="background:var(--zone-5)"></span>Max</div>
+  </div>
+</body></html>

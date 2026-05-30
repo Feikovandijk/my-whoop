@@ -1,0 +1,24 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--bg-0);padding:22px;font-family:var(--font-ui);display:flex;gap:36px;align-items:center;justify-content:center}
+  .ring{position:relative;display:grid;place-items:center}
+  .ring .v{position:absolute;text-align:center}
+  .v .n{font-family:var(--font-display);font-weight:700;color:#fff;line-height:1}
+  .v .l{font-weight:700;font-size:9px;letter-spacing:1.2px;text-transform:uppercase;margin-top:3px}
+</style></head><body>
+  <div class="ring">
+    <svg width="150" height="150"><circle cx="75" cy="75" r="62" stroke="#1F262C" stroke-width="13" fill="none"/><circle cx="75" cy="75" r="62" stroke="var(--green)" stroke-width="13" fill="none" stroke-linecap="round" stroke-dasharray="389" stroke-dashoffset="62" transform="rotate(-90 75 75)"/></svg>
+    <div class="v"><div class="n" style="font-size:46px">84<span style="font-size:24px;color:var(--fg-2)">%</span></div><div class="l" style="color:var(--green)">Recovery</div></div>
+  </div>
+  <div class="ring">
+    <svg width="96" height="96"><circle cx="48" cy="48" r="40" stroke="#1F262C" stroke-width="8" fill="none"/><circle cx="48" cy="48" r="40" stroke="var(--blue)" stroke-width="8" fill="none" stroke-linecap="round" stroke-dasharray="251" stroke-dashoffset="38" transform="rotate(-90 48 48)"/></svg>
+    <div class="v"><div class="n" style="font-size:24px">85<span style="font-size:13px;color:var(--fg-2)">%</span></div><div class="l" style="color:var(--blue)">Sleep</div></div>
+  </div>
+  <div class="ring">
+    <svg width="50" height="50"><circle cx="25" cy="25" r="20" stroke="#1F262C" stroke-width="4" fill="none"/><circle cx="25" cy="25" r="20" stroke="var(--yellow)" stroke-width="4" fill="none" stroke-linecap="round" stroke-dasharray="126" stroke-dashoffset="60" transform="rotate(-90 25 25)"/></svg>
+    <div class="v"><div class="n" style="font-size:14px">52</div></div>
+  </div>
+</body></html>

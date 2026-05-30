@@ -1,0 +1,14 @@
+<!-- @dsCard group="Spacing" -->
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--bg-0);padding:26px;font-family:var(--font-ui);display:flex;gap:20px}
+  .card{flex:1;height:96px;border-radius:var(--r-card);background:var(--bg-1);border:1px solid var(--line-1);display:flex;flex-direction:column;justify-content:center;padding:0 18px}
+  .nm{font-size:12px;font-weight:700;color:var(--fg-1)}
+  .sp{font-family:var(--font-mono);font-size:10px;color:var(--fg-3);margin-top:4px}
+</style></head><body>
+  <div class="card" style="box-shadow:var(--shadow-card)"><div class="nm">Card elevation</div><div class="sp">hairline + inset + soft drop</div></div>
+  <div class="card" style="box-shadow:var(--glow-green);border-color:rgba(43,240,122,.5)"><div class="nm" style="color:var(--green)">Live glow · green</div><div class="sp">--glow-green</div></div>
+  <div class="card" style="box-shadow:var(--glow-blue);border-color:rgba(44,155,255,.5)"><div class="nm" style="color:var(--blue)">Live glow · blue</div><div class="sp">--glow-blue</div></div>
+</body></html>
