@@ -425,6 +425,18 @@ class ServerSync(
         }
     }
 
+    suspend fun getDailyExplanation(date: String): MetricExplanation? = withContext(Dispatchers.IO) {
+        val config = NetworkConfig.load(context)
+        val url = "${config.baseURL}/v1/explain/daily"
+        val auth = "Bearer ${config.apiKey}"
+        try {
+            val response = service.getDailyExplanation(url, auth, deviceId, date)
+            if (response.isSuccessful) response.body() else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     suspend fun getHRSeries(fromEpoch: Long, toEpoch: Long, maxPoints: Int): List<TrendPoint> = withContext(Dispatchers.IO) {
         val config = NetworkConfig.load(context)
         val url = "${config.baseURL}/v1/streams/hr"

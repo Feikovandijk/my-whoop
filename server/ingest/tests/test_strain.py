@@ -201,6 +201,14 @@ class TestEstimateHrmax:
         assert source == "unknown"
         assert hrmax == 0.0
 
+    def test_low_observed_without_age_uses_plausible_floor(self):
+        # A partial passive capture can have plenty of samples but no true max effort.
+        # It must not turn a 121 bpm afternoon peak into the user's HRmax.
+        history = _hr_list(121, HRMAX_MIN_SAMPLES)
+        hrmax, source = estimate_hrmax(history, age=None)
+        assert source == "floor"
+        assert hrmax == pytest.approx(190.0, abs=0.01)
+
     def test_no_history_with_age_falls_back_to_tanaka(self):
         hrmax, source = estimate_hrmax([], age=35)
         assert source == "tanaka"
@@ -213,17 +221,12 @@ class TestEstimateHrmax:
         assert tanaka_hrmax(20) == pytest.approx(194.0, abs=0.01)
 
     def test_observed_p995_rejects_spike(self):
-        # 999 readings at 150, 1 at 999 (artifact) — p99.5 should stay ~150,
-        # not 999. With 1000 samples the 99.5th percentile is between index 994
-        # and 995 (0-based), which are all 150. The spike at index 999 (100th
-        # percentile) doesn't pull the 99.5th up.
+        # 999 readings at 150, 1 at 999 (artifact): p99.5 should stay below the
+        # no-age floor, so the floor wins and the spike does not pull HRmax up.
         history = [150.0] * (HRMAX_MIN_SAMPLES - 1) + [999.0]
         hrmax, source = estimate_hrmax(history, age=None)
-        assert source == "observed"
-        # p99.5 of [150]*999 + [999] with n=1000:
-        # idx_f = 0.995 * 999 = 994.005 -> lo=994, frac=0.005
-        # sorted[994]=150, sorted[995]=150 -> p99.5 = 150.0 + 0.005*(150-150) = 150
-        assert hrmax == pytest.approx(150.0, abs=1.0)
+        assert source == "floor"
+        assert hrmax == pytest.approx(190.0, abs=0.01)
 
     def test_220_minus_age_not_used_as_primary(self):
         # With age=30, Tanaka gives 187; 220-30=190.  Tanaka is the designated

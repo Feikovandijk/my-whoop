@@ -66,6 +66,10 @@ class WhoopBleService : Service() {
     private var uploadJob: Job? = null
     private var backfillJob: Job? = null
 
+    private val backfillChannel = kotlinx.coroutines.channels.Channel<ByteArray>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+    private var backfillConsumerJob: Job? = null
+
+
     private var hasRediscoveredServices = false
 
     // GATT command queue
@@ -95,6 +99,21 @@ class WhoopBleService : Service() {
         }
     }
 
+    private fun startBackfillConsumer() {
+        backfillConsumerJob?.cancel()
+        backfillConsumerJob = serviceScope.launch {
+            for (frame in backfillChannel) {
+                if (backfilling) {
+                    if (Backfiller.endData(frame) != null || (frame.size > 4 && (frame[4].toInt() == 47 || frame[4].toInt() == 48 || frame[4].toInt() == 49 || frame[4].toInt() == 50))) {
+                        armBackfillTimeout()
+                    }
+                    backfiller?.ingest(frame)
+                    afterBackfillIngest()
+                }
+            }
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         activeInstance = this
@@ -103,10 +122,13 @@ class WhoopBleService : Service() {
 
         registerReceiver(bondStateReceiver, IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED))
 
+        startBackfillConsumer()
+
         serviceScope.launch {
             bootstrapStore()
         }
     }
+
 
     private suspend fun bootstrapStore() {
         withContext(Dispatchers.IO) {
@@ -612,13 +634,7 @@ class WhoopBleService : Service() {
                         collector?.ingest(frame)
 
                         if (backfilling) {
-                            if (Backfiller.endData(frame) != null || frame.size > 4 && (frame[4].toInt() == 47 || frame[4].toInt() == 48 || frame[4].toInt() == 49 || frame[4].toInt() == 50)) {
-                                armBackfillTimeout()
-                            }
-                            serviceScope.launch {
-                                backfiller?.ingest(frame)
-                                afterBackfillIngest()
-                            }
+                            backfillChannel.trySend(frame)
                         }
                     }
                 }
@@ -698,6 +714,9 @@ class WhoopBleService : Service() {
     private fun beginBackfill() {
         if (!connectHandshakeDone) return
         val back = backfiller ?: return
+        while (backfillChannel.tryReceive().isSuccess) {
+            // Drain any leftover/stale frames
+        }
         back.begin()
         backfilling = true
         val gatt = bluetoothGatt ?: return

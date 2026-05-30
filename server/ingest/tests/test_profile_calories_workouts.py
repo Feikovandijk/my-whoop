@@ -211,7 +211,7 @@ def test_profile_upsert_and_read(clean_db):
     from app import read as _read
     with psycopg.connect(clean_db) as conn:
         store.ensure_device(conn, "devProf")
-        store.upsert_profile(conn, "devProf", height_cm=178.0, weight_kg=72.5, age=29, sex="male")
+        store.upsert_profile(conn, "devProf", height_cm=178.0, weight_kg=72.5, age=29, sex="male", max_hr=190.0)
         conn.commit()
         row = _read.query_profile(conn, "devProf")
     assert row is not None
@@ -219,6 +219,7 @@ def test_profile_upsert_and_read(clean_db):
     assert abs(row["weight_kg"] - 72.5) < 1e-4
     assert row["age"] == 29
     assert row["sex"] == "male"
+    assert row["max_hr"] == 190.0
 
 
 @requires_docker
@@ -227,14 +228,15 @@ def test_profile_upsert_overwrites(clean_db):
     from app import read as _read
     with psycopg.connect(clean_db) as conn:
         store.ensure_device(conn, "devProf2")
-        store.upsert_profile(conn, "devProf2", height_cm=170.0, weight_kg=65.0, age=25, sex="female")
+        store.upsert_profile(conn, "devProf2", height_cm=170.0, weight_kg=65.0, age=25, sex="female", max_hr=185.0)
         conn.commit()
-        store.upsert_profile(conn, "devProf2", height_cm=171.0, weight_kg=66.0, age=26, sex="nonbinary")
+        store.upsert_profile(conn, "devProf2", height_cm=171.0, weight_kg=66.0, age=26, sex="nonbinary", max_hr=190.0)
         conn.commit()
         row = _read.query_profile(conn, "devProf2")
     assert abs(row["height_cm"] - 171.0) < 1e-4
     assert row["age"] == 26
     assert row["sex"] == "nonbinary"
+    assert row["max_hr"] == 190.0
 
 
 @requires_docker
@@ -272,18 +274,20 @@ def test_get_profile_missing_returns_empty(client):
 
 @requires_docker
 def test_post_and_get_profile(client, clean_db):
-    body = {"device": "devP1", "height_cm": 175.0, "weight_kg": 70.0, "age": 30, "sex": "male"}
+    body = {"device": "devP1", "height_cm": 175.0, "weight_kg": 70.0, "age": 30, "sex": "male", "max_hr": 190.0}
     r = client.post("/v1/profile", json=body)
     assert r.status_code == 200
     data = r.json()
     assert abs(data["height_cm"] - 175.0) < 1e-4
     assert data["sex"] == "male"
     assert data["device_id"] == "devP1"
+    assert data["max_hr"] == 190.0
 
     # GET returns same data
     r2 = client.get("/v1/profile", params={"device": "devP1"})
     assert r2.status_code == 200
     assert r2.json()["weight_kg"] - 70.0 < 1e-4
+    assert r2.json()["max_hr"] == 190.0
 
 
 @requires_docker

@@ -99,6 +99,10 @@ HRMAX_MIN_SAMPLES: int = 600  # 10 min at 1 Hz
 #: peak efforts while discarding single-beat artifacts.
 HRMAX_PERCENTILE: float = 99.5
 
+#: Conservative lower bound used when no age/profile is available. A low observed
+#: percentile from passive partial-day data is not evidence of a low HRmax.
+HRMAX_NO_AGE_FLOOR: float = 190.0
+
 # ---------------------------------------------------------------------------
 # Banister exponential TRIMP coefficients (Banister 1991)
 # ---------------------------------------------------------------------------
@@ -150,7 +154,9 @@ def estimate_hrmax(
         history as the observed peak. If age is also known, return the LARGER of
         the observed peak and the Tanaka estimate (so a thin observed window never
         under-caps the zones), and report ``"observed"`` or ``"tanaka"`` according
-        to which value won.
+        to which value won. Without age, never return less than
+        ``HRMAX_NO_AGE_FLOOR`` because passive partial-day data is not a max-effort
+        test.
       * With thin history but a known age, use the Tanaka formula (it is more
         accurate than ``220 − age`` across the adult range), reporting ``"tanaka"``.
       * With neither, return ``(0.0, "unknown")`` — the caller must guard.
@@ -163,6 +169,8 @@ def estimate_hrmax(
     if n >= HRMAX_MIN_SAMPLES:
         observed = _percentile(sorted(hr_history), HRMAX_PERCENTILE)
         if tanaka is None:
+            if observed < HRMAX_NO_AGE_FLOOR:
+                return HRMAX_NO_AGE_FLOOR, "floor"
             return observed, "observed"
         if observed >= tanaka:
             return observed, "observed"

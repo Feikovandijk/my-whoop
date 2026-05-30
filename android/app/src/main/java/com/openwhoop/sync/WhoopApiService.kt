@@ -49,6 +49,14 @@ interface WhoopApiService {
     ): Response<ResponseBody>
 
     @GET
+    suspend fun getDailyExplanation(
+        @Url url: String,
+        @Header("Authorization") authHeader: String,
+        @Query("device") deviceId: String,
+        @Query("date") date: String
+    ): Response<MetricExplanation>
+
+    @GET
     suspend fun getWorkouts(
         @Url url: String,
         @Header("Authorization") authHeader: String,

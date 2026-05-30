@@ -158,9 +158,11 @@ CREATE TABLE IF NOT EXISTS profile (
     height_cm  REAL,
     weight_kg  REAL,
     age        INTEGER,
+    max_hr     REAL,
     sex        TEXT,           -- "male" | "female" | "nonbinary" | NULL
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE profile ADD COLUMN IF NOT EXISTS max_hr REAL;
 
 CREATE TABLE IF NOT EXISTS daily_metrics (
     device_id      TEXT NOT NULL,

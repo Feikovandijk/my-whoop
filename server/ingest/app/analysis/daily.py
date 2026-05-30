@@ -421,11 +421,19 @@ def compute_day(conn, device_id: str, day: _dt.date) -> dict[str, Any]:
             sleep_perf=sleep_perf,
         )
 
+    # Read the device profile for HRmax and calorie estimation.
+    device_profile = read.query_profile(conn, device_id)
+
     # ── Personalized HRmax (observed p99.5 over trailing HR history) ─────────
-    # Age is unknown, so the observed p99.5 dominates (estimate_hrmax falls through
-    # to Tanaka/220−age only when history is thin). ~175k HR rows on the live device.
+    # If profile age is known, Tanaka acts as a floor. Without age, strain.py
+    # applies a conservative floor so partial passive captures do not under-cap HRmax.
     hr_history = _trailing_hr_history(conn, device_id, day)
-    hrmax, _hrmax_source = _strain.estimate_hrmax(hr_history, age=None)
+    profile_max_hr = device_profile.get("max_hr") if device_profile else None
+    if profile_max_hr is not None:
+        hrmax, _hrmax_source = float(profile_max_hr), "profile"
+    else:
+        profile_age = device_profile.get("age") if device_profile else None
+        hrmax, _hrmax_source = _strain.estimate_hrmax(hr_history, age=profile_age)
     eff_max_hr = hrmax if hrmax > 0.0 else None
 
     # ── Strain over the WHOOP sleep-to-sleep day ─────────────────────────────
@@ -450,8 +458,6 @@ def compute_day(conn, device_id: str, day: _dt.date) -> dict[str, Any]:
         resting_hr=float(resting_hr) if resting_hr is not None else _strain.DEFAULT_RESTING_HR)
 
     # ── Exercise (calendar day; explicit resting_hr + personalized HRmax) ─────
-    # Read the device profile for calorie estimation (None → calories stay None).
-    device_profile = read.query_profile(conn, device_id)
     exercises = _exercise.detect_exercises(
         day_streams,
         resting_hr=float(resting_hr) if resting_hr is not None else None,

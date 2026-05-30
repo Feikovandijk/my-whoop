@@ -1,3 +1,4 @@
+import datetime as dt
 import importlib
 import psycopg
 import pytest
@@ -121,6 +122,86 @@ def test_stream_bad_kind_404(client):
     _ingest(client)
     r = client.get("/v1/streams/bogus", params={"device": "devA"})
     assert r.status_code == 404
+
+
+@requires_docker
+def test_explain_daily_includes_metric_inputs_and_strain_warning(client, clean_db):
+    with psycopg.connect(clean_db) as conn:
+        store.ensure_device(conn, "devExplain")
+        store.upsert_streams(conn, "devExplain", {
+            "hr": [
+                {"ts": 1761825600, "bpm": 58},
+                {"ts": 1761840000, "bpm": 122},
+                {"ts": 1761856000, "bpm": 91},
+            ],
+            "rr": [
+                {"ts": 1761800400, "rr_ms": 930},
+                {"ts": 1761800401, "rr_ms": 950},
+            ],
+            "resp": [{"ts": 1761800500, "raw": 512}],
+            "spo2": [{"ts": 1761800600, "red": 587, "ir": 585}],
+            "skin_temp": [{"ts": 1761800700, "raw": 930}],
+        })
+        store.upsert_daily_metrics(conn, "devExplain", dt.date(2025, 10, 30), {
+            "total_sleep_min": 430.0,
+            "efficiency": 0.91,
+            "deep_min": 82.0,
+            "rem_min": 96.0,
+            "light_min": 252.0,
+            "disturbances": 4,
+            "resting_hr": 49,
+            "avg_hrv": 71.2,
+            "recovery": 76.0,
+            "strain": 12.4,
+            "exercise_count": 1,
+            "sleep_start": 1761798600,
+            "sleep_end": 1761825600,
+            "spo2_pct": 96.7,
+            "skin_temp_dev_c": 0.2,
+            "resp_rate_bpm": 15.8,
+        })
+        store.upsert_sleep_sessions(conn, "devExplain", [{
+            "start": 1761798600,
+            "end": 1761825600,
+            "efficiency": 0.91,
+            "resting_hr": 49,
+            "avg_hrv": 71.2,
+            "stages": [
+                {"start": 1761798600, "end": 1761802200, "stage": "light"},
+                {"start": 1761802200, "end": 1761805800, "stage": "deep"},
+            ],
+        }])
+        store.upsert_exercise_sessions(conn, "devExplain", [{
+            "start": 1761840000,
+            "end": 1761843600,
+            "avg_hr": 132.0,
+            "peak_hr": 162,
+            "strain": 6.1,
+            "kind": "run",
+            "duration_s": 3600,
+            "zone_time_pct": {"0": 4.0, "1": 20.0, "2": 42.0, "3": 25.0, "4": 8.0, "5": 1.0},
+            "avg_hrr_pct": 64.0,
+            "hrmax": 185.0,
+            "hrmax_source": "observed",
+            "calories_kcal": 520.0,
+            "calories_kj": 2175.0,
+        }])
+        conn.commit()
+
+    r = client.get("/v1/explain/daily", params={"device": "devExplain", "date": "2025-10-30"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["device_id"] == "devExplain"
+    assert body["date"] == "2025-10-30"
+    assert body["metrics"]["strain"]["value"] == 12.4
+    assert body["metrics"]["strain"]["algorithm"] == "hrr_edwards_trimp_log21"
+    assert body["metrics"]["strain"]["status"] == "approx"
+    assert "cardiovascular only" in body["metrics"]["strain"]["limitation"].lower()
+    assert body["metrics"]["strain"]["inputs"]["hr_samples"] == 3
+    assert body["metrics"]["strain"]["inputs"]["exercise_sessions"] == 1
+    assert body["metrics"]["recovery"]["inputs"]["rr_samples"] == 2
+    assert body["metrics"]["sleep"]["inputs"]["sleep_sessions"] == 1
+    assert body["data_quality"]["stream_counts"]["spo2"] == 1
 
 
 @requires_docker

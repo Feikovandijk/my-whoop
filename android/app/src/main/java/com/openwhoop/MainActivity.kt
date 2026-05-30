@@ -46,6 +46,9 @@ import androidx.core.content.ContextCompat
 import com.openwhoop.ble.WhoopBleService
 import com.openwhoop.ble.protocol.*
 import com.openwhoop.database.*
+import com.openwhoop.sync.MetricExplanation
+import com.openwhoop.sync.MetricExplanationCopy
+import com.openwhoop.sync.MetricExplanationFallback
 import com.openwhoop.sync.ServerSync
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -222,13 +225,22 @@ fun MainScreen() {
 @Composable
 fun TodayTabScreen() {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     var dailyMetrics by remember { mutableStateOf<List<DailyMetric>>(emptyList()) }
+    var explanation by remember { mutableStateOf<MetricExplanation?>(null) }
+    var selectedExplanationKey by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         val db = WhoopDatabase.getDatabase(context)
         val store = WhoopStore(db)
         val fetched = store.dailyMetrics("my-whoop", "2000-01-01", "2030-01-01")
         dailyMetrics = fetched
+        fetched.lastOrNull()?.let { metric ->
+            explanation = MetricExplanationFallback.fromDailyMetric("my-whoop", metric)
+            ServerSync(context, store, "my-whoop").getDailyExplanation(metric.day)?.let { serverExplanation ->
+                explanation = serverExplanation
+            }
+        }
     }
 
     val latestMetric = dailyMetrics.lastOrNull()
@@ -238,6 +250,29 @@ fun TodayTabScreen() {
     val efficiency = latestMetric?.efficiency ?: 0.0
     val avgHrv = latestMetric?.avgHrv ?: 0.0
     val restingHr = latestMetric?.restingHr ?: 0
+
+    fun openExplanation(key: String) {
+        selectedExplanationKey = key
+        val metric = dailyMetrics.lastOrNull() ?: return
+        if (explanation == null || explanation?.date != metric.day) {
+            explanation = MetricExplanationFallback.fromDailyMetric("my-whoop", metric)
+        }
+        coroutineScope.launch {
+            val db = WhoopDatabase.getDatabase(context)
+            val store = WhoopStore(db)
+            ServerSync(context, store, "my-whoop").getDailyExplanation(metric.day)?.let { serverExplanation ->
+                explanation = serverExplanation
+            }
+        }
+    }
+
+    selectedExplanationKey?.let { key ->
+        CalculationSheet(
+            metricKey = key,
+            explanation = explanation,
+            onDismiss = { selectedExplanationKey = null }
+        )
+    }
 
     val animatedPercent = animateFloatAsState(
         targetValue = recovery.toFloat(),
@@ -270,6 +305,16 @@ fun TodayTabScreen() {
                     color = Color.Gray,
                     fontWeight = FontWeight.Bold
                 )
+            }
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                MethodButton("Recovery method", Modifier.weight(1f)) { openExplanation("recovery") }
+                MethodButton("Strain method", Modifier.weight(1f)) { openExplanation("strain") }
             }
         }
 
@@ -380,6 +425,10 @@ fun TodayTabScreen() {
                         color = Color.Gray,
                         fontSize = 11.sp
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextButton(onClick = { openExplanation("strain") }) {
+                        Text("How strain is built", color = Color(0xFFFFCC00), fontSize = 12.sp)
+                    }
                 }
             }
         }
@@ -427,6 +476,10 @@ fun TodayTabScreen() {
                             Text("${latestMetric?.disturbances ?: 0} waking events", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         }
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextButton(onClick = { openExplanation("sleep") }) {
+                        Text("How sleep is built", color = Color(0xFF0099FF), fontSize = 12.sp)
+                    }
                 }
             }
         }
@@ -448,6 +501,9 @@ fun TodayTabScreen() {
                         Text("HRV (Average)", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(8.dp))
                         Text("${avgHrv.toInt()} ms", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Black)
+                        TextButton(onClick = { openExplanation("recovery") }, contentPadding = PaddingValues(0.dp)) {
+                            Text("Inputs", color = Color(0xFF0099FF), fontSize = 11.sp)
+                        }
                     }
                 }
 
@@ -462,11 +518,73 @@ fun TodayTabScreen() {
                         Text("Resting HR", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(8.dp))
                         Text("$restingHr bpm", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Black)
+                        TextButton(onClick = { openExplanation("recovery") }, contentPadding = PaddingValues(0.dp)) {
+                            Text("Inputs", color = Color(0xFFFF3366), fontSize = 11.sp)
+                        }
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+fun MethodButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(8.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(label, color = Color.LightGray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+fun CalculationSheet(metricKey: String, explanation: MetricExplanation?, onDismiss: () -> Unit) {
+    val title = when (metricKey) {
+        "strain" -> "Strain calculation"
+        "recovery" -> "Recovery calculation"
+        "sleep" -> "Sleep calculation"
+        else -> "Metric calculation"
+    }
+    val metric = explanation?.metrics?.get(metricKey)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close", color = MaterialTheme.colorScheme.primary)
+            }
+        },
+        title = { Text(title, color = Color.White, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (metric == null) {
+                    Text(
+                        "No daily metric is cached for this calculation yet. Sync server to phone from Device, then reopen this sheet.",
+                        color = Color.LightGray,
+                        fontSize = 13.sp
+                    )
+                } else {
+                    MetricExplanationCopy.lines(metricKey, metric).forEach { line ->
+                        Text(line, color = Color.LightGray, fontSize = 13.sp)
+                    }
+                    val counts = explanation.dataQuality.streamCounts
+                    if (counts.isNotEmpty()) {
+                        Text(
+                            "Daily data: ${counts["hr"] ?: 0} HR, ${counts["rr"] ?: 0} RR, ${counts["resp"] ?: 0} resp, ${counts["gravity"] ?: 0} movement samples.",
+                            color = Color.Gray,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            }
+        },
+        containerColor = Color(0xFF161616)
+    )
 }
 
 // 2. SLEEP TAB: Sleep efficiency gauge, time asleep progress, stage bars, sleep wellness signals, smart alarm
@@ -601,7 +719,7 @@ fun SleepTabScreen() {
                     StageBar(
                         label = "Deep Sleep (SWS)",
                         duration = "${(deep / 60).toInt()}h ${(deep % 60).toInt()}m",
-                        fraction = (deep / totalSleep).toFloat(),
+                        fraction = SleepUiMetrics.stageFraction(deep, totalSleep),
                         color = Color(0xFF0033CC)
                     )
                     Spacer(modifier = Modifier.height(12.dp))
@@ -609,7 +727,7 @@ fun SleepTabScreen() {
                     StageBar(
                         label = "REM Sleep",
                         duration = "${(rem / 60).toInt()}h ${(rem % 60).toInt()}m",
-                        fraction = (rem / totalSleep).toFloat(),
+                        fraction = SleepUiMetrics.stageFraction(rem, totalSleep),
                         color = Color(0xFF9933FF)
                     )
                     Spacer(modifier = Modifier.height(12.dp))
@@ -617,7 +735,7 @@ fun SleepTabScreen() {
                     StageBar(
                         label = "Light Sleep",
                         duration = "${(light / 60).toInt()}h ${(light % 60).toInt()}m",
-                        fraction = (light / totalSleep).toFloat(),
+                        fraction = SleepUiMetrics.stageFraction(light, totalSleep),
                         color = Color(0xFF0099FF)
                     )
                     Spacer(modifier = Modifier.height(12.dp))
@@ -626,7 +744,7 @@ fun SleepTabScreen() {
                     StageBar(
                         label = "Awake / Disturbances",
                         duration = "${awakeMins.toInt()} mins (${disturbances}x)",
-                        fraction = (awakeMins / totalSleep).toFloat().coerceIn(0f, 0.2f),
+                        fraction = SleepUiMetrics.awakeFraction(awakeMins, totalSleep),
                         color = Color(0xFFFF3366)
                     )
                 }
@@ -738,6 +856,7 @@ fun TrendsTabScreen() {
     var dailyMetrics by remember { mutableStateOf<List<DailyMetric>>(emptyList()) }
     var selectedRange by remember { mutableStateOf(7) } // 7, 30, 90 days
     var selectedMetric by remember { mutableStateOf("Recovery") } // Recovery, Strain, HRV, RHR
+    var selectedDay by remember { mutableStateOf<DailyMetric?>(null) }
 
     LaunchedEffect(Unit) {
         val db = WhoopDatabase.getDatabase(context)
@@ -768,6 +887,10 @@ fun TrendsTabScreen() {
         "HRV" -> Color(0xFF0099FF)
         "RHR" -> Color(0xFFFF3366)
         else -> Color(0xFF00FF66)
+    }
+
+    selectedDay?.let { day ->
+        DailyDetailDialog(day = day, onDismiss = { selectedDay = null })
     }
 
     LazyColumn(
@@ -930,81 +1053,98 @@ fun TrendsTabScreen() {
 
         // SCROLLABLE DAY METRICS LIST
         items(displayMetrics.reversed()) { m ->
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, Color(0x12FFFFFF), RoundedCornerShape(16.dp))
+            DailyHistoryRow(metric = m, onClick = { selectedDay = m })
+        }
+    }
+}
+
+@Composable
+fun DailyHistoryRow(metric: DailyMetric, onClick: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, Color(0x12FFFFFF), RoundedCornerShape(16.dp))
+            .clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        val recVal = m.recovery ?: 0.5
-                        val ringColor = when {
-                            recVal >= 0.66 -> Color(0xFF00FF66)
-                            recVal >= 0.34 -> Color(0xFFFFCC00)
-                            else -> Color(0xFFFF3366)
-                        }
-
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.size(45.dp)
-                        ) {
-                            Canvas(modifier = Modifier.fillMaxSize()) {
-                                drawArc(
-                                    color = Color(0x0FFFFFFF),
-                                    startAngle = 0f,
-                                    sweepAngle = 360f,
-                                    useCenter = false,
-                                    style = Stroke(width = 4.dp.toPx())
-                                )
-                                drawArc(
-                                    color = ringColor,
-                                    startAngle = -90f,
-                                    sweepAngle = (recVal * 360f).toFloat(),
-                                    useCenter = false,
-                                    style = Stroke(width = 4.dp.toPx())
-                                )
-                            }
-                            Text(
-                                text = "${(recVal * 100).toInt()}",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                        }
-
-                        Column {
-                            Text(text = m.day, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                            Text(text = "HRV: ${m.avgHrv?.toInt() ?: 60} ms | RHR: ${m.restingHr ?: 55} bpm", color = Color.Gray, fontSize = 11.sp)
-                        }
-                    }
-
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            text = "${m.strain ?: 0.0} Strain",
-                            color = Color(0xFFFFCC00),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "${((m.totalSleepMin ?: 450.0) / 60).toInt()}h ${((m.totalSleepMin ?: 450.0) % 60).toInt()}m sleep",
-                            color = Color.Gray,
-                            fontSize = 11.sp
-                        )
-                    }
+                val recVal = metric.recovery ?: 0.0
+                val ringColor = when {
+                    recVal >= 0.66 -> Color(0xFF00FF66)
+                    recVal >= 0.34 -> Color(0xFFFFCC00)
+                    else -> Color(0xFFFF3366)
                 }
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(45.dp)) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        drawArc(
+                            color = Color(0x0FFFFFFF),
+                            startAngle = 0f,
+                            sweepAngle = 360f,
+                            useCenter = false,
+                            style = Stroke(width = 4.dp.toPx())
+                        )
+                        drawArc(
+                            color = ringColor,
+                            startAngle = -90f,
+                            sweepAngle = (recVal * 360f).toFloat(),
+                            useCenter = false,
+                            style = Stroke(width = 4.dp.toPx())
+                        )
+                    }
+                    Text("${(recVal * 100).toInt()}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+                Column {
+                    Text(metric.day, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "HRV ${metric.avgHrv?.toInt() ?: 0} ms · RHR ${metric.restingHr ?: 0} bpm · Resp ${metric.respRateBpm?.let { String.format(Locale.US, "%.1f", it) } ?: "--"}",
+                        color = Color.Gray,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text("${String.format(Locale.US, "%.1f", metric.strain ?: 0.0)} strain", color = Color(0xFFFFCC00), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "${((metric.totalSleepMin ?: 0.0) / 60).toInt()}h ${((metric.totalSleepMin ?: 0.0) % 60).toInt()}m sleep",
+                    color = Color.Gray,
+                    fontSize = 11.sp
+                )
             }
         }
     }
+}
+
+@Composable
+fun DailyDetailDialog(day: DailyMetric, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close", color = MaterialTheme.colorScheme.primary)
+            }
+        },
+        title = { Text(day.day, color = Color.White, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Recovery ${(day.recovery ?: 0.0).let { (it * 100).toInt() }} / 100", color = Color.White)
+                Text("Strain ${String.format(Locale.US, "%.1f", day.strain ?: 0.0)} / 21", color = Color(0xFFFFCC00))
+                Text("Sleep ${((day.totalSleepMin ?: 0.0) / 60).toInt()}h ${((day.totalSleepMin ?: 0.0) % 60).toInt()}m · efficiency ${(((day.efficiency ?: 0.0) * 100).toInt())}%", color = Color.LightGray)
+                Text("Stages deep ${day.deepMin?.toInt() ?: 0}m · REM ${day.remMin?.toInt() ?: 0}m · light ${day.lightMin?.toInt() ?: 0}m", color = Color.LightGray)
+                Text("Night signals SpO2 ${day.spo2Pct?.let { String.format(Locale.US, "%.1f%%", it) } ?: "--"} · skin ${day.skinTempDevC?.let { String.format(Locale.US, "%+.1f C", it) } ?: "--"} · resp ${day.respRateBpm?.let { String.format(Locale.US, "%.1f bpm", it) } ?: "--"}", color = Color.Gray)
+            }
+        },
+        containerColor = Color(0xFF161616)
+    )
 }
 
 @Composable
@@ -1184,68 +1324,130 @@ fun WorkoutCard(workout: Workout) {
     val sdf = SimpleDateFormat("EEE, MMM d, HH:mm", Locale.getDefault())
     val startStr = sdf.format(Date(workout.startTs * 1000))
     val minutes = workout.durationS / 60
+    var expanded by remember { mutableStateOf(false) }
 
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         modifier = Modifier
             .fillMaxWidth()
             .border(1.dp, Color(0x12FFFFFF), RoundedCornerShape(16.dp))
+            .clickable { expanded = !expanded }
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1.5f)) {
-                Text(
-                    text = workout.kind ?: "Exercise",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(text = startStr, color = Color.Gray, fontSize = 12.sp)
-                Spacer(modifier = Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Column {
-                        Text("Duration", color = Color.Gray, fontSize = 10.sp)
-                        Text("${minutes} mins", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1.5f)) {
+                    Text(
+                        text = workout.kind ?: "Exercise",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(text = startStr, color = Color.Gray, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Column {
+                            Text("Duration", color = Color.Gray, fontSize = 10.sp)
+                            Text("${minutes} mins", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Column {
+                            Text("Avg HR", color = Color.Gray, fontSize = 10.sp)
+                            Text("${workout.avgHr.toInt()} bpm", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Column {
+                            Text("Calories", color = Color.Gray, fontSize = 10.sp)
+                            Text(
+                                WorkoutDisplay.caloriesText(workout.caloriesKcal, workout.caloriesKj),
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
-                    Column {
-                        Text("Avg HR", color = Color.Gray, fontSize = 10.sp)
-                        Text("${workout.avgHr.toInt()} bpm", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+
+                workout.strain?.let { strVal ->
+                    val badgeColor = when {
+                        strVal >= 14.0 -> Color(0xFFFFCC00)
+                        strVal >= 10.0 -> Color(0xFF00FF66)
+                        else -> Color(0xFF0099FF)
                     }
-                    Column {
-                        Text("Calories", color = Color.Gray, fontSize = 10.sp)
-                        Text(workout.caloriesKcal?.let { "${it.toInt()} kcal" } ?: "--", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(badgeColor.copy(alpha = 0.15f))
+                            .border(1.dp, badgeColor, RoundedCornerShape(20.dp))
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = String.format(Locale.US, "%.1f", strVal),
+                            color = badgeColor,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 15.sp
+                        )
                     }
                 }
             }
-
-            workout.strain?.let { strVal ->
-                val badgeColor = when {
-                    strVal >= 14.0 -> Color(0xFFFFCC00)
-                    strVal >= 10.0 -> Color(0xFF00FF66)
-                    else -> Color(0xFF0099FF)
-                }
-
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(badgeColor.copy(alpha = 0.15f))
-                        .border(1.dp, badgeColor, RoundedCornerShape(20.dp))
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = String.format(Locale.US, "%.1f", strVal),
-                        color = badgeColor,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 15.sp
-                    )
-                }
+            if (expanded) {
+                Spacer(modifier = Modifier.height(14.dp))
+                WorkoutZoneBreakdown(workout)
             }
         }
     }
+}
+
+@Composable
+fun WorkoutZoneBreakdown(workout: Workout) {
+    Text(
+        text = "HR zone breakdown",
+        color = Color.Gray,
+        fontSize = 11.sp,
+        fontWeight = FontWeight.Bold
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    val colors = mapOf(
+        0 to Color(0xFF3F5450),
+        1 to Color(0xFF2EE6C6),
+        2 to Color(0xFF39D6FF),
+        3 to Color(0xFFFFD23F),
+        4 to Color(0xFFFF9F43),
+        5 to Color(0xFFFF5A6E)
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(12.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(Color(0x0FFFFFFF))
+    ) {
+        (0..5).forEach { zone ->
+            val pct = workout.zoneTimePct[zone] ?: 0.0
+            if (pct > 0.0) {
+                Box(
+                    modifier = Modifier
+                        .weight(pct.toFloat())
+                        .fillMaxHeight()
+                        .background(colors[zone] ?: Color.Gray)
+                )
+            }
+        }
+    }
+    Spacer(modifier = Modifier.height(8.dp))
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text("Avg %HRR ${workout.avgHrrPct?.let { String.format(Locale.US, "%.0f%%", it) } ?: "--"}", color = Color.LightGray, fontSize = 12.sp)
+        Text("Peak ${workout.peakHr} bpm", color = Color.LightGray, fontSize = 12.sp)
+        Text("HRmax ${workout.hrmax?.let { it.toInt().toString() } ?: "--"}", color = Color.LightGray, fontSize = 12.sp)
+    }
+    Text(
+        text = "Strain is cardiovascular load only until calibrated against WHOOP reference data.",
+        color = Color.Gray,
+        fontSize = 11.sp,
+        modifier = Modifier.padding(top = 6.dp)
+    )
 }
 
 fun getMockWorkouts(): List<Workout> {

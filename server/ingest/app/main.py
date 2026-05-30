@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import db, ingest, read, store
-from .analysis import daily
+from .analysis import daily, explain
 from .config import load_config
 
 _log = logging.getLogger("whoop.ingest")
@@ -248,6 +248,27 @@ def get_sleep(device: str, date: str):
         return read.query_sleep(conn, device, day)
 
 
+@app.get("/v1/explain/daily", dependencies=[Depends(require_auth)])
+def explain_daily(device: str, date: str):
+    """Explain persisted daily metrics, their inputs, and approximation status."""
+    day = _parse_date(date)
+    day_start = _dt.datetime.combine(day, _dt.time(0, 0), _dt.timezone.utc)
+    day_end = day_start + _dt.timedelta(days=1)
+    with psycopg.connect(cfg.db_dsn) as conn:
+        rows = read.query_daily(conn, device, day, day)
+        if not rows:
+            raise HTTPException(status_code=404, detail="daily metrics not found")
+        stream_counts = read.counts(conn, device, int(day_start.timestamp()), int(day_end.timestamp()) - 1)
+        sleep_sessions = read.query_sleep(conn, device, day)
+        workouts = read.query_workouts(conn, device, day, day)
+        return explain.build_daily_explanation(
+            daily_row=rows[0],
+            stream_counts=stream_counts,
+            sleep_session_count=len(sleep_sessions),
+            exercise_session_count=len(workouts),
+        )
+
+
 # ── Profile endpoints ─────────────────────────────────────────────────────────
 
 _VALID_SEX = {"male", "female", "nonbinary"}
@@ -258,6 +279,7 @@ class ProfileBody(BaseModel):
     height_cm: float | None = None
     weight_kg: float | None = None
     age: int | None = None
+    max_hr: float | None = None
     sex: str | None = None
 
 
@@ -286,7 +308,8 @@ def upsert_profile(body: ProfileBody):
                              height_cm=body.height_cm,
                              weight_kg=body.weight_kg,
                              age=body.age,
-                             sex=sex)
+                             sex=sex,
+                             max_hr=body.max_hr)
         conn.commit()
         row = read.query_profile(conn, body.device)
     return row
