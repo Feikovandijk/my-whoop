@@ -61,6 +61,9 @@ class WhoopBleService : Service() {
 
     private val stuckDetector = StuckStrapDetector(stuckAfterSeconds = 600.0, behindGapSeconds = 300)
     private var strapNewestTs: Long? = null
+    // Ring-buffer read pointer (U) from the last GET_DATA_RANGE response.
+    // Handed to the Backfiller as sessionStartTrim so ACKs never advance U forward.
+    private var strapReadPointer: Long? = null
     private var backfillTimeoutJob: Job? = null
 
     private var uploadJob: Job? = null
@@ -629,6 +632,7 @@ class WhoopBleService : Service() {
 
                         if (frame.size > 6 && (frame[6].toInt() and 0xFF) == WhoopCommand.GET_DATA_RANGE.value.toInt()) {
                             strapNewestTs = dataRangeNewestUnix(frame)
+                            dataRangeReadPointer(frame)?.let { strapReadPointer = it }
                         }
 
                         if (backfilling) {
@@ -706,6 +710,21 @@ class WhoopBleService : Service() {
         return newest
     }
 
+    // Parse GET_DATA_RANGE response to extract the ring-buffer read pointer (U, word index [3]).
+    // Layout (from protocol RE): body[7..] = [W, ?, W_unix, U, ?, T, count, ...] as u32 LE words.
+    // U is the current "trim / read" cursor — the oldest slot the strap will re-serve next offload.
+    private fun dataRangeReadPointer(frame: ByteArray): Long? {
+        if (frame.size < 7 + 4 * 4) return null   // need at least 4 words after the header
+        val base = 7
+        // word[3] = U (read/trim pointer)
+        val uOff = base + 3 * 4
+        if (uOff + 4 > frame.size) return null
+        return (frame[uOff].toLong() and 0xFFL) or
+               ((frame[uOff+1].toLong() and 0xFFL) shl 8) or
+               ((frame[uOff+2].toLong() and 0xFFL) shl 16) or
+               ((frame[uOff+3].toLong() and 0xFFL) shl 24)
+    }
+
     private fun isOffloadFrame(frame: ByteArray): Boolean {
         if (frame.size <= 4) return false
         val type = frame[4].toInt() and 0xFF
@@ -727,6 +746,9 @@ class WhoopBleService : Service() {
         while (backfillChannel.tryReceive().isSuccess) {
             // Drain any leftover/stale frames
         }
+        // Anchor the session: pass the current read pointer so chunk ACKs never move U forward.
+        // strapReadPointer is populated by GET_DATA_RANGE in the handshake above.
+        back.sessionStartTrim = strapReadPointer
         back.begin()
         backfilling = true
         val gatt = bluetoothGatt ?: return

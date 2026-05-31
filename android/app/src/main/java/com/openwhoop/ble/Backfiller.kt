@@ -15,6 +15,12 @@ class Backfiller(
     var isBackfilling = false
         private set
 
+    // Ring-buffer read pointer (U) captured from GET_DATA_RANGE at session start.
+    // Every chunk is ACKed with this fixed value so U never advances — the strap keeps
+    // all data re-servable. Without this, each ACK moves U forward and the strap can
+    // eventually overwrite old records as its write pointer catches up.
+    var sessionStartTrim: Long? = null
+
     private val chunk = mutableListOf<ByteArray>()
     private var chunkOpen = false
 
@@ -58,7 +64,7 @@ class Backfiller(
     }
 
     private suspend fun finishChunk(unix: Long, trim: Long, endFrame: ByteArray) {
-        val endData = endData(endFrame) ?: return
+        if (endFrame.size < 25) return   // sanity-check (endData would have returned null)
         val frames = synchronized(chunk) {
             val copy = ArrayList(chunk)
             chunk.clear()
@@ -97,13 +103,21 @@ class Backfiller(
             }
         }
 
-        try {
-            store.setCursor("strap_trim", trim)
-        } catch (e: Exception) {
-            return
+        // Build ACK payload: 0x01 + trim index (u32 LE) + padding (u32 LE).
+        // Use sessionStartTrim (captured before the session began) so U never advances
+        // past where we started. The strap sees a valid success ACK and sends the next
+        // chunk, but never reclaims the flash slots we've already read.
+        // Fall back to the chunk's own trim only if we somehow have no session anchor.
+        val ackTrimIndex = sessionStartTrim ?: trim
+        val safeEndData = ByteArray(8).also { buf ->
+            buf[0] = (ackTrimIndex and 0xFF).toByte()
+            buf[1] = ((ackTrimIndex shr 8) and 0xFF).toByte()
+            buf[2] = ((ackTrimIndex shr 16) and 0xFF).toByte()
+            buf[3] = ((ackTrimIndex shr 24) and 0xFF).toByte()
+            // bytes [4..7] = 0x00 (second u32 = 0, matching the protocol)
         }
 
-        ackTrim(trim, endData)
+        ackTrim(ackTrimIndex, safeEndData)
     }
 
     fun timeoutFired() {

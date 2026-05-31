@@ -760,9 +760,11 @@ fun TodayTabScreen() {
                                 .background(OWColor.bg3)
                         ) {
                             // Progress
+                            val strainFraction = (strain / 21.0).toFloat()
+                            val safeStrainFraction = if (strainFraction.isNaN()) 0f else strainFraction.coerceIn(0f, 1f)
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth(fraction = (strain / 21.0).toFloat().coerceIn(0f, 1f))
+                                    .fillMaxWidth(fraction = safeStrainFraction)
                                     .fillMaxHeight()
                                     .clip(RoundedCornerShape(5.dp))
                                     .background(
@@ -774,11 +776,12 @@ fun TodayTabScreen() {
                         }
                         
                         // Ceiling indicator overlay
-                        val ceilingFraction = (ceiling / 21.0).toFloat().coerceIn(0f, 1f)
+                        val ceilingFraction = (ceiling / 21.0).toFloat()
+                        val safeCeilingFraction = if (ceilingFraction.isNaN()) 0f else ceilingFraction.coerceIn(0f, 1f)
                         Box(
                             modifier = Modifier
                                 .align(Alignment.CenterStart)
-                                .fillMaxWidth(fraction = ceilingFraction)
+                                .fillMaxWidth(fraction = safeCeilingFraction)
                         ) {
                             Box(
                                 modifier = Modifier
@@ -1167,16 +1170,29 @@ fun SleepTabScreen() {
         else alarmDaysString.split(",").mapNotNull { it.toIntOrNull() }.toSet()
     ) }
 
+    android.util.Log.d("MainActivity", "SleepTabScreen recomposing: smartAlarmOn=$smartAlarmOn, hour=$alarmHour, min=$alarmMinute, win=$alarmWindow, days=$alarmDays")
+
     fun saveAlarmSettings(on: Boolean, hour: Int, minute: Int, window: Int, days: Set<Int>) {
-        prefs.edit().apply {
-            putBoolean("alarm_on", on)
-            putInt("alarm_hour", hour)
-            putInt("alarm_minute", minute)
-            putInt("alarm_window", window)
-            putString("alarm_days", days.joinToString(","))
-            apply()
+        android.util.Log.d("MainActivity", "saveAlarmSettings: on=$on, hour=$hour, min=$minute, win=$window, days=$days")
+        try {
+            prefs.edit()
+                .putBoolean("alarm_on", on)
+                .putInt("alarm_hour", hour)
+                .putInt("alarm_minute", minute)
+                .putInt("alarm_window", window)
+                .putString("alarm_days", days.joinToString(","))
+                .apply()
+            android.util.Log.d("MainActivity", "saveAlarmSettings: saved to prefs successfully")
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "saveAlarmSettings: error writing prefs", e)
         }
-        WhoopBleService.activeInstance?.syncAlarmToStrap()
+        try {
+            val service = WhoopBleService.activeInstance
+            android.util.Log.d("MainActivity", "saveAlarmSettings: service activeInstance is ${if (service == null) "null" else "non-null"}")
+            service?.syncAlarmToStrap()
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "saveAlarmSettings: error syncing to service", e)
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -1471,7 +1487,8 @@ fun SleepTabScreen() {
                     )
 
                     val last7 = dailyMetrics.takeLast(7)
-                    val maxSleep = last7.map { it.totalSleepMin ?: 0.0 }.maxOrNull() ?: 1.0
+                    val maxSleep = last7.map { it.totalSleepMin.orZero() }.maxOrNull() ?: 1.0
+                    val maxSleepVal = if (maxSleep <= 0.0 || maxSleep.isNaN()) 1.0 else maxSleep
 
                     Row(
                         modifier = Modifier
@@ -1482,8 +1499,9 @@ fun SleepTabScreen() {
                         verticalAlignment = Alignment.Bottom
                     ) {
                         last7.forEachIndexed { index, dayMetric ->
-                            val sleepMin = dayMetric.totalSleepMin ?: 0.0
-                            val ratio = (sleepMin / maxSleep).toFloat().coerceIn(0f, 1f)
+                            val sleepMin = dayMetric.totalSleepMin.orZero()
+                            val ratioVal = (sleepMin / maxSleepVal).toFloat()
+                            val safeRatio = if (ratioVal.isNaN()) 0f else ratioVal.coerceIn(0f, 1f)
                             val isLatest = index == last7.size - 1
                             val barColor = if (isLatest) OWColor.blue else OWColor.blue.copy(alpha = 0.32f)
 
@@ -1523,7 +1541,7 @@ fun SleepTabScreen() {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .fillMaxHeight(ratio * 0.7f)
+                                        .fillMaxHeight(safeRatio * 0.7f)
                                         .clip(RoundedCornerShape(topStart = 5.dp, topEnd = 5.dp))
                                         .background(barColor)
                                 )
@@ -1796,6 +1814,7 @@ fun SleepTabScreen() {
 
 @Composable
 fun StageBar(label: String, duration: String, fraction: Float, color: Color) {
+    val safeFraction = if (fraction.isNaN()) 0f else fraction.coerceIn(0f, 1f)
     Column {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1814,7 +1833,7 @@ fun StageBar(label: String, duration: String, fraction: Float, color: Color) {
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(fraction = fraction.coerceIn(0f, 1f))
+                    .fillMaxWidth(fraction = safeFraction)
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(3.dp))
                     .background(color)
@@ -1884,9 +1903,9 @@ fun TrendsTabScreen() {
 
     val metricConfig = remember {
         mapOf(
-            "Recovery" to MetricDef(color = OWColor.green, unit = "%", getVal = { (it.recovery ?: 0.0) * 100.0 }, format = { "${it.toInt()}%" }),
-            "Strain" to MetricDef(color = OWColor.blue, unit = "", getVal = { it.strain ?: 0.0 }, format = { String.format(Locale.US, "%.1f", it) }),
-            "HRV" to MetricDef(color = OWColor.teal, unit = " ms", getVal = { it.avgHrv ?: 0.0 }, format = { "${it.toInt()} ms" }),
+            "Recovery" to MetricDef(color = OWColor.green, unit = "%", getVal = { (it.recovery.orZero()) * 100.0 }, format = { "${it.toInt()}%" }),
+            "Strain" to MetricDef(color = OWColor.blue, unit = "", getVal = { it.strain.orZero() }, format = { String.format(Locale.US, "%.1f", it) }),
+            "HRV" to MetricDef(color = OWColor.teal, unit = " ms", getVal = { it.avgHrv.orZero() }, format = { "${it.toInt()} ms" }),
             "RHR" to MetricDef(color = OWColor.red, unit = " bpm", getVal = { (it.restingHr ?: 0).toDouble() }, format = { "${it.toInt()} bpm" })
         )
     }
@@ -2267,7 +2286,7 @@ fun TrendsTabScreen() {
 
 @Composable
 fun DailyHistoryRow(metric: DailyMetric, onClick: () -> Unit) {
-    val recVal = metric.recovery ?: 0.0
+    val recVal = metric.recovery.orZero()
     val rc = OWColor.recoveryColor(recVal)
     val formattedDate = remember(metric.day) {
         try {
@@ -2279,8 +2298,8 @@ fun DailyHistoryRow(metric: DailyMetric, onClick: () -> Unit) {
             metric.day
         }
     }
-    val sleepHours = ((metric.totalSleepMin ?: 0.0) / 60).toInt()
-    val sleepMins = ((metric.totalSleepMin ?: 0.0) % 60).toInt()
+    val sleepHours = (metric.totalSleepMin.orZero() / 60).toInt()
+    val sleepMins = (metric.totalSleepMin.orZero() % 60).toInt()
     val sleepStr = "${sleepHours}h ${sleepMins}m"
 
     Card(
@@ -2372,11 +2391,11 @@ fun DailyDetailDialog(day: DailyMetric, onDismiss: () -> Unit) {
         title = { Text(day.day, color = Color.White, fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Recovery ${(day.recovery ?: 0.0).let { (it * 100).toInt() }} / 100", color = Color.White)
-                Text("Strain ${String.format(Locale.US, "%.1f", day.strain ?: 0.0)} / 21", color = OWColor.blue)
-                Text("Sleep ${((day.totalSleepMin ?: 0.0) / 60).toInt()}h ${((day.totalSleepMin ?: 0.0) % 60).toInt()}m · efficiency ${(((day.efficiency ?: 0.0) * 100).toInt())}%", color = Color.LightGray)
-                Text("Stages deep ${day.deepMin?.toInt() ?: 0}m · REM ${day.remMin?.toInt() ?: 0}m · light ${day.lightMin?.toInt() ?: 0}m", color = Color.LightGray)
-                Text("Night signals SpO2 ${day.spo2Pct?.let { String.format(Locale.US, "%.1f%%", it) } ?: "--"} · skin ${day.skinTempDevC?.let { String.format(Locale.US, "%+.1f C", it) } ?: "--"} · resp ${day.respRateBpm?.let { String.format(Locale.US, "%.1f bpm", it) } ?: "--"}", color = Color.Gray)
+                Text("Recovery ${day.recovery.orZero().let { (it * 100).toInt() }} / 100", color = Color.White)
+                Text("Strain ${String.format(Locale.US, "%.1f", day.strain.orZero())} / 21", color = OWColor.blue)
+                Text("Sleep ${(day.totalSleepMin.orZero() / 60).toInt()}h ${(day.totalSleepMin.orZero() % 60).toInt()}m · efficiency ${(day.efficiency.orZero() * 100).toInt()}%", color = Color.LightGray)
+                Text("Stages deep ${day.deepMin.orZero().toInt()}m · REM ${day.remMin.orZero().toInt()}m · light ${day.lightMin.orZero().toInt()}m", color = Color.LightGray)
+                Text("Night signals SpO2 ${day.spo2Pct?.let { if (it.isNaN()) null else String.format(Locale.US, "%.1f%%", it) } ?: "--"} · skin ${day.skinTempDevC?.let { if (it.isNaN()) null else String.format(Locale.US, "%+.1f C", it) } ?: "--"} · resp ${day.respRateBpm?.let { if (it.isNaN()) null else String.format(Locale.US, "%.1f bpm", it) } ?: "--"}", color = Color.Gray)
             }
         },
         containerColor = OWColor.bg1
